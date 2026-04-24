@@ -1,9 +1,13 @@
-otplib.authenticator.options = {
-  step: 30,
-  digits: 6
-};
-
-render();
+// ===== TOTP生成 =====
+function generateTOTP(secret) {
+  const totp = new OTPAuth.TOTP({
+    secret: OTPAuth.Secret.fromBase32(secret),
+    digits: 6,
+    period: 30,
+    algorithm: "SHA1",
+  });
+  return totp.generate();
+}
 
 function getTimeRemaining() {
   return 30 - (Math.floor(Date.now() / 1000) % 30);
@@ -12,9 +16,10 @@ function getTimeRemaining() {
 // ===== 重複チェック =====
 async function isDuplicate(secret) {
   const accounts = await getAllAccounts();
-  return accounts.some(acc => acc.secret === secret);
+  return accounts.some((acc) => acc.secret === secret);
 }
 
+// ===== 追加 =====
 async function addAccount() {
   const name = document.getElementById("name").value;
   const issuer = document.getElementById("issuer").value;
@@ -23,7 +28,7 @@ async function addAccount() {
   if (!name || !secret) return;
 
   if (await isDuplicate(secret)) {
-    alert("同じシークレットのアカウントは既に存在します");
+    alert("同じシークレットは既に登録されています");
     return;
   }
 
@@ -36,6 +41,7 @@ async function addAccount() {
   render();
 }
 
+// ===== 描画 =====
 async function render() {
   const list = document.getElementById("list");
   list.innerHTML = "";
@@ -45,7 +51,7 @@ async function render() {
   const percent = (remain / 30) * 100;
 
   accounts.forEach((acc) => {
-    const code = otplib.authenticator.generate(acc.secret);
+    const code = generateTOTP(acc.secret);
 
     const div = document.createElement("div");
     div.className = "card";
@@ -80,7 +86,7 @@ function copy(text) {
 async function exportData() {
   const accounts = await getAllAccounts();
 
-  const lines = accounts.map(acc => {
+  const lines = accounts.map((acc) => {
     const issuer = encodeURIComponent(acc.issuer || "Unknown");
     const name = encodeURIComponent(acc.name);
     return `otpauth://totp/${issuer}:${name}?secret=${acc.secret}&issuer=${issuer}`;
@@ -110,16 +116,17 @@ async function importData() {
       const issuer = url.searchParams.get("issuer") || issuerFromPath;
 
       if (!secret || !name) continue;
-
       if (await isDuplicate(secret)) continue;
 
       await addAccountDB({ name, issuer, secret });
-
     } catch {}
   }
 
   render();
 }
 
-// 更新
+// 更新ループ
 setInterval(render, 1000);
+
+// 初期描画
+render();
