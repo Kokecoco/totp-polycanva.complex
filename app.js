@@ -4,11 +4,12 @@ function generateTOTP(secret) {
     secret: OTPAuth.Secret.fromBase32(secret),
     digits: 6,
     period: 30,
-    algorithm: "SHA1",
+    algorithm: "SHA1"
   });
   return totp.generate();
 }
 
+// ===== 残り時間 =====
 function getTimeRemaining() {
   return 30 - (Math.floor(Date.now() / 1000) % 30);
 }
@@ -16,7 +17,7 @@ function getTimeRemaining() {
 // ===== 重複チェック =====
 async function isDuplicate(secret) {
   const accounts = await getAllAccounts();
-  return accounts.some((acc) => acc.secret === secret);
+  return accounts.some(acc => acc.secret === secret);
 }
 
 // ===== 追加 =====
@@ -41,20 +42,19 @@ async function addAccount() {
   render();
 }
 
-// ===== 描画 =====
+// ===== 初期描画（DOM作成のみ） =====
 async function render() {
   const list = document.getElementById("list");
   list.innerHTML = "";
 
   const accounts = await getAllAccounts();
-  const remain = getTimeRemaining();
-  const percent = (remain / 30) * 100;
 
-  accounts.forEach((acc) => {
-    const code = generateTOTP(acc.secret);
-
+  accounts.forEach(acc => {
     const div = document.createElement("div");
     div.className = "card";
+
+    // ★ secretをdatasetに保持
+    div.dataset.secret = acc.secret;
 
     div.innerHTML = `
       <div class="row">
@@ -62,22 +62,48 @@ async function render() {
         <button class="delete" onclick="removeAccount(${acc.id})">削除</button>
       </div>
 
-      <div class="code" onclick="copy('${code}')">${code}</div>
+      <div class="code"></div>
 
       <div class="bar">
-        <div class="fill" style="width:${percent}%"></div>
+        <div class="fill"></div>
       </div>
     `;
 
     list.appendChild(div);
   });
+
+  updateCodes(); // 初回更新
 }
 
+// ===== コード更新（DOM再生成しない） =====
+function updateCodes() {
+  const cards = document.querySelectorAll(".card");
+
+  const remain = getTimeRemaining();
+  const percent = (remain / 30) * 100;
+
+  cards.forEach(card => {
+    const secret = card.dataset.secret;
+
+    const code = generateTOTP(secret);
+
+    const codeEl = card.querySelector(".code");
+    const fillEl = card.querySelector(".fill");
+
+    codeEl.textContent = code;
+    codeEl.onclick = () => copy(code);
+
+    fillEl.style.width = percent + "%";
+  });
+}
+
+// ===== 削除 =====
 async function removeAccount(id) {
   await deleteAccount(id);
   render();
 }
 
+// ===== コピー =====
 function copy(text) {
   navigator.clipboard.writeText(text);
 }
@@ -86,7 +112,7 @@ function copy(text) {
 async function exportData() {
   const accounts = await getAllAccounts();
 
-  const lines = accounts.map((acc) => {
+  const lines = accounts.map(acc => {
     const issuer = encodeURIComponent(acc.issuer || "Unknown");
     const name = encodeURIComponent(acc.name);
     return `otpauth://totp/${issuer}:${name}?secret=${acc.secret}&issuer=${issuer}`;
@@ -119,14 +145,15 @@ async function importData() {
       if (await isDuplicate(secret)) continue;
 
       await addAccountDB({ name, issuer, secret });
+
     } catch {}
   }
 
   render();
 }
 
-// 更新ループ
-setInterval(render, 1000);
+// ===== 更新ループ（ここが重要） =====
+setInterval(updateCodes, 1000);
 
-// 初期描画
+// ===== 初期表示 =====
 render();
